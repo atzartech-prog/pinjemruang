@@ -1,0 +1,47 @@
+[
+  {
+    "id": "room-nusantara",
+    "name": "Ruang Nusantara",
+    "floor": "Lantai 3",
+    "capacity": 20,
+    "color": "#6366f1",
+    "facilities": ["Projector", "Wi-Fi", "Sound System", "Whiteboard", "AC", "Video Conference"],
+    "description": "Ruang rapat direksi premium dengan pemandangan kota dan fasilitas konferensi video lengkap."
+  },
+  {
+    "id": "room-merdeka",
+    "name": "Ruang Merdeka",
+    "floor": "Lantai 2",
+    "capacity": 10,
+    "color": "#ec4899",
+    "facilities": ["TV Screen", "Wi-Fi", "Whiteboard", "AC"],
+    "description": "Cocok untuk rapat divisi jangka menengah atau sesi brainstorming tim internal."
+  },
+  {
+    "id": "room-pancasila",
+    "name": "Ruang Pancasila",
+    "floor": "Lantai 1",
+    "capacity": 50,
+    "color": "#10b981",
+    "facilities": ["Projector", "Wi-Fi", "Sound System", "Stage", "AC", "Wireless Mic"],
+    "description": "Aula besar yang ideal untuk seminar, presentasi korporat, atau pelatihan skala besar."
+  },
+  {
+    "id": "room-gotong-royong",
+    "name": "Ruang Gotong Royong",
+    "floor": "Lantai 2",
+    "capacity": 4,
+    "color": "#f59e0b",
+    "facilities": ["Wi-Fi", "Whiteboard", "AC"],
+    "description": "Ruang diskusi kecil (huddle room) untuk rapat cepat atau koordinasi harian."
+  },
+  {
+    "id": "room-bhinneka",
+    "name": "Ruang Bhinneka",
+    "floor": "Lantai 4",
+    "capacity": 8,
+    "color": "#06b6d4",
+    "facilities": ["TV Screen", "Wi-Fi", "Bean Bags", "AC", "Coffee Maker"],
+    "description": "Ruang kolaborasi kasual dengan bean bags untuk merangsang kreativitas tim Anda."
+  }
+]
