@@ -1025,3 +1025,126 @@ body {
     width: 100%;
   }
 }
+
+/* --- Manage Rooms CRUD Styles --- */
+.manage-rooms-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.rooms-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rooms-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.rooms-table th,
+.rooms-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.rooms-table th {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.rooms-table td {
+  color: var(--text-secondary);
+}
+
+.rooms-table tbody tr {
+  transition: var(--transition-smooth);
+}
+
+.rooms-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table-room-name {
+  font-weight: 700;
+  color: var(--text-primary) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.action-badge {
+  padding: 6px 12px;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  border: none;
+}
+
+.action-badge.edit {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  margin-right: 8px;
+}
+
+.action-badge.edit:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.action-badge.delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.action-badge.delete:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.color-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-container input[type="color"] {
+  -webkit-appearance: none;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+}
+
+.color-picker-container input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker-container input[type="color"]::-webkit-color-swatch {
+  border: 2px solid var(--glass-border);
+  border-radius: 50%;
+}
+

@@ -13,6 +13,9 @@ let appState = {
       search: '',
       date: '',
       room: 'all'
+    },
+    manageRooms: {
+      search: ''
     }
   }
 };
@@ -75,6 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateStats();
   renderRooms();
   renderBookings();
+  renderManageRooms();
   populateRoomSelects();
   
   // Set current date in booking form as default
@@ -119,16 +123,26 @@ function toggleTheme() {
   showToast(`Mode ${appState.theme === 'light' ? 'Terang' : 'Gelap'} diaktifkan`, 'success');
 }
 
-// Load Rooms Data (with Fallback)
+// Load Rooms Data (with LocalStorage and Fallback)
 async function loadRooms() {
-  try {
-    const response = await fetch('rooms.json');
-    if (!response.ok) throw new Error('Network error loading rooms');
-    appState.rooms = await response.json();
-  } catch (error) {
-    console.warn("Failed to fetch rooms.json (usually due to file:// CORS restrictions on mobile). Falling back to embedded rooms list.", error);
-    appState.rooms = DEFAULT_ROOMS;
+  const savedRooms = localStorage.getItem('ruangreserva_rooms');
+  if (savedRooms) {
+    appState.rooms = JSON.parse(savedRooms);
+  } else {
+    try {
+      const response = await fetch('rooms.json');
+      if (!response.ok) throw new Error('Network error loading rooms');
+      appState.rooms = await response.json();
+    } catch (error) {
+      console.warn("Failed to fetch rooms.json (usually due to file:// CORS restrictions on mobile). Falling back to embedded rooms list.", error);
+      appState.rooms = DEFAULT_ROOMS;
+    }
+    saveRooms();
   }
+}
+
+function saveRooms() {
+  localStorage.setItem('ruangreserva_rooms', JSON.stringify(appState.rooms));
 }
 
 // Load Bookings Data from LocalStorage
@@ -179,6 +193,15 @@ function setupEventListeners() {
         content.classList.remove('active');
       });
       document.getElementById(`tab-${tabName}`).classList.add('active');
+      
+      // Render components if tab changes
+      if (tabName === 'rooms') {
+        renderRooms();
+      } else if (tabName === 'bookings') {
+        renderBookings();
+      } else if (tabName === 'manage-rooms') {
+        renderManageRooms();
+      }
     });
   });
 
@@ -187,20 +210,30 @@ function setupEventListeners() {
     openBookingModal();
   });
 
-  // Modal Actions
+  // Booking Modal Actions
   document.getElementById('btn-close-modal').addEventListener('click', closeBookingModal);
   document.getElementById('btn-cancel-modal').addEventListener('click', closeBookingModal);
   document.getElementById('booking-modal').addEventListener('click', (e) => {
     if (e.target.id === 'booking-modal') closeBookingModal();
   });
 
-  // Form Submit Handler
+  // Booking Form Submit Handler
   document.getElementById('booking-form').addEventListener('submit', handleFormSubmit);
 
   // Live validation on scheduling inputs
   const inputsToValidate = ['booking-room-select', 'booking-date', 'booking-start-time', 'booking-end-time'];
   inputsToValidate.forEach(id => {
     document.getElementById(id).addEventListener('change', checkLiveConflict);
+  });
+
+  // Room Select validation details
+  document.getElementById('booking-room-select').addEventListener('change', (e) => {
+    const roomId = e.target.value;
+    const room = appState.rooms.find(r => r.id === roomId);
+    if (room) {
+      document.getElementById('booking-participants').max = room.capacity;
+      document.getElementById('booking-participants').placeholder = `Max ${room.capacity}`;
+    }
   });
 
   // Search & Filters (Rooms)
@@ -226,6 +259,34 @@ function setupEventListeners() {
     appState.filters.bookings.room = e.target.value;
     renderBookings();
   });
+
+  // CRUD Room Listeners
+  document.getElementById('btn-new-room').addEventListener('click', () => {
+    openRoomModal();
+  });
+  document.getElementById('btn-close-room-modal').addEventListener('click', closeRoomModal);
+  document.getElementById('btn-cancel-room-modal').addEventListener('click', closeRoomModal);
+  document.getElementById('room-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'room-modal') closeRoomModal();
+  });
+  document.getElementById('room-form').addEventListener('submit', handleRoomFormSubmit);
+  document.getElementById('search-manage-rooms').addEventListener('input', (e) => {
+    appState.filters.manageRooms.search = e.target.value.toLowerCase();
+    renderManageRooms();
+  });
+
+  // Backup Export/Import Listeners
+  document.getElementById('btn-export').addEventListener('click', exportData);
+  document.getElementById('btn-import-trigger').addEventListener('click', () => {
+    document.getElementById('input-import').click();
+  });
+  document.getElementById('input-import').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      importData(file);
+    }
+    e.target.value = ''; // Reset file input
+  });
 }
 
 // Populate dropdown elements
@@ -233,7 +294,10 @@ function populateRoomSelects() {
   const bookingRoomSelect = document.getElementById('booking-room-select');
   const filterBookingRoom = document.getElementById('filter-booking-room');
   
-  // Clear previous options
+  // Keep current selection if valid
+  const currentSelect = bookingRoomSelect.value;
+  const currentFilter = filterBookingRoom.value;
+  
   bookingRoomSelect.innerHTML = '<option value="" disabled selected>Pilih salah satu ruangan...</option>';
   filterBookingRoom.innerHTML = '<option value="all">Semua Ruangan</option>';
   
@@ -250,6 +314,14 @@ function populateRoomSelects() {
     optionFilter.textContent = room.name;
     filterBookingRoom.appendChild(optionFilter);
   });
+  
+  // Restore selections
+  if (appState.rooms.some(r => r.id === currentSelect)) {
+    bookingRoomSelect.value = currentSelect;
+  }
+  if (currentFilter === 'all' || appState.rooms.some(r => r.id === currentFilter)) {
+    filterBookingRoom.value = currentFilter;
+  }
 }
 
 // Calculate Statistics
@@ -275,7 +347,7 @@ function updateStats() {
   document.getElementById('stat-hours-booked').textContent = `${totalHours} Jam`;
 }
 
-// Render Room Cards
+// Render Room Cards (Tab 1)
 function renderRooms() {
   const container = document.getElementById('rooms-grid');
   container.innerHTML = '';
@@ -338,7 +410,7 @@ function renderRooms() {
           ${room.capacity} Org
         </span>
       </div>
-      <p class="room-desc">${room.description}</p>
+      <p class="room-desc">${room.description || 'Tidak ada deskripsi.'}</p>
       <span class="facilities-title">Fasilitas</span>
       <div class="facilities-list">${facilitiesHTML}</div>
       <div class="room-footer">
@@ -359,7 +431,7 @@ function renderRooms() {
   });
 }
 
-// Render Bookings List
+// Render Bookings List (Tab 2)
 function renderBookings() {
   const container = document.getElementById('bookings-list');
   container.innerHTML = '';
@@ -374,8 +446,6 @@ function renderBookings() {
   
   const filteredBookings = sortedBookings.filter(booking => {
     const room = appState.rooms.find(r => r.id === booking.roomId);
-    const roomName = room ? room.name : '';
-    
     const matchesSearch = booking.title.toLowerCase().includes(appState.filters.bookings.search) || 
                           booking.organizer.toLowerCase().includes(appState.filters.bookings.search);
     const matchesDate = !appState.filters.bookings.date || booking.date === appState.filters.bookings.date;
@@ -397,13 +467,8 @@ function renderBookings() {
   
   filteredBookings.forEach(booking => {
     const room = appState.rooms.find(r => r.id === booking.roomId);
-    const roomName = room ? room.name : 'Unknown Room';
-    const roomColor = room ? room.color : '#6366f1';
-    
-    // Format Date Indoneisan style
-    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateObj = new Date(booking.date);
-    const formattedDate = dateObj.toLocaleDateString('id-ID', dateOptions);
+    const roomName = room ? room.name : 'Ruangan Terhapus';
+    const roomColor = room ? room.color : '#64748b';
     
     const card = document.createElement('div');
     card.className = 'booking-card';
@@ -444,7 +509,63 @@ function renderBookings() {
   });
 }
 
-// Modal handling
+// Render Manage Rooms Table (Tab 3 - CRUD)
+function renderManageRooms() {
+  const tbody = document.getElementById('manage-rooms-list');
+  tbody.innerHTML = '';
+  
+  const filteredRooms = appState.rooms.filter(room => {
+    return room.name.toLowerCase().includes(appState.filters.manageRooms.search);
+  });
+  
+  if (filteredRooms.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+          Tidak ada ruangan untuk dikelola yang cocok.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  filteredRooms.forEach(room => {
+    const tr = document.createElement('tr');
+    
+    tr.innerHTML = `
+      <td>
+        <span class="table-room-name">
+          <span class="table-color-dot" style="background-color: ${room.color};"></span>
+          ${room.name}
+        </span>
+      </td>
+      <td>${room.floor}</td>
+      <td>${room.capacity} Orang</td>
+      <td>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+          ${room.facilities.slice(0, 3).map(f => `<span class="facility-tag" style="font-size: 0.65rem; padding: 2px 6px;">${f}</span>`).join('')}
+          ${room.facilities.length > 3 ? `<span class="facility-tag" style="font-size: 0.65rem; padding: 2px 6px; opacity: 0.7;">+${room.facilities.length - 3}</span>` : ''}
+        </div>
+      </td>
+      <td>
+        <button class="action-badge edit" data-edit-id="${room.id}">Edit</button>
+        <button class="action-badge delete" data-delete-id="${room.id}">Hapus</button>
+      </td>
+    `;
+    
+    tbody.appendChild(tr);
+    
+    // Bind buttons
+    tr.querySelector('.action-badge.edit').addEventListener('click', () => {
+      openRoomModal(room.id);
+    });
+    tr.querySelector('.action-badge.delete').addEventListener('click', () => {
+      deleteRoom(room.id);
+    });
+  });
+}
+
+// Modal booking operations
 function openBookingModal(roomId = '') {
   const modal = document.getElementById('booking-modal');
   const form = document.getElementById('booking-form');
@@ -466,6 +587,8 @@ function openBookingModal(roomId = '') {
       document.getElementById('booking-participants').max = room.capacity;
       document.getElementById('booking-participants').placeholder = `Max ${room.capacity}`;
     }
+  } else {
+    document.getElementById('booking-participants').placeholder = `Peserta`;
   }
   
   modal.classList.add('active');
@@ -475,7 +598,7 @@ function closeBookingModal() {
   document.getElementById('booking-modal').classList.remove('active');
 }
 
-// Live Collision Checker
+// Live Collision Checker for overlaps
 function checkLiveConflict() {
   const roomId = document.getElementById('booking-room-select').value;
   const date = document.getElementById('booking-date').value;
@@ -492,7 +615,7 @@ function checkLiveConflict() {
     return;
   }
   
-  // Simple check for time order
+  // Validate time format: start before end
   if (startTime >= endTime) {
     alertBox.querySelector('.alert-message').innerHTML = '<strong>Format Jam Salah!</strong> Jam selesai harus setelah jam mulai rapat.';
     alertBox.style.display = 'flex';
@@ -500,7 +623,7 @@ function checkLiveConflict() {
     return;
   }
   
-  // Check against all existing bookings for the same room & date (ignoring current booking ID in case of editing)
+  // Check against all existing bookings for the same room & date (excluding own booking)
   const isConflict = appState.bookings.some(b => {
     return b.roomId === roomId &&
            b.date === date &&
@@ -519,7 +642,7 @@ function checkLiveConflict() {
   }
 }
 
-// Form Submission Handler
+// Booking Form Submit Handler
 function handleFormSubmit(e) {
   e.preventDefault();
   
@@ -533,14 +656,20 @@ function handleFormSubmit(e) {
   const notes = document.getElementById('booking-notes').value.trim();
   const bookingId = document.getElementById('booking-id').value;
   
-  // Double check room capacity
+  // Verify room capacity
   const room = appState.rooms.find(r => r.id === roomId);
   if (room && participants > room.capacity) {
-    showToast(`Peserta melebihi kapasitas ${room.name} (Max ${room.capacity})`, 'error');
+    showToast(`Pesan gagal: Peserta melebihi kapasitas ${room.name} (Max ${room.capacity} org)`, 'error');
     return;
   }
   
-  // Final Collision check
+  // Validate time boundaries
+  if (startTime >= endTime) {
+    showToast('Pesan gagal: Jam selesai harus setelah jam mulai.', 'error');
+    return;
+  }
+  
+  // Double-check booking overlaps
   const isConflict = appState.bookings.some(b => {
     return b.roomId === roomId &&
            b.date === date &&
@@ -550,7 +679,7 @@ function handleFormSubmit(e) {
   });
   
   if (isConflict) {
-    showToast('Pemesanan gagal: Jadwal bentrok dengan pemesanan lain.', 'error');
+    showToast('Pesan gagal: Jadwal bentrok dengan pemesanan lain.', 'error');
     return;
   }
   
@@ -567,12 +696,10 @@ function handleFormSubmit(e) {
   };
   
   if (bookingId) {
-    // Edit existing
     const index = appState.bookings.findIndex(b => b.id === bookingId);
     appState.bookings[index] = newBooking;
     showToast('Reservasi berhasil diperbarui!', 'success');
   } else {
-    // Add new
     appState.bookings.push(newBooking);
     showToast('Reservasi berhasil dijadwalkan!', 'success');
   }
@@ -594,6 +721,217 @@ function cancelBooking(bookingId) {
     renderBookings();
     showToast('Reservasi telah dibatalkan', 'success');
   }
+}
+
+// CRUD ROOM MODAL HELPERS
+function openRoomModal(roomId = '') {
+  const modal = document.getElementById('room-modal');
+  const form = document.getElementById('room-form');
+  const title = document.getElementById('room-modal-title');
+  
+  form.reset();
+  document.getElementById('room-id').value = '';
+  document.getElementById('room-color').value = '#6366f1';
+  
+  if (roomId) {
+    title.textContent = 'Edit Data Ruangan';
+    const room = appState.rooms.find(r => r.id === roomId);
+    if (room) {
+      document.getElementById('room-id').value = room.id;
+      document.getElementById('room-name').value = room.name;
+      document.getElementById('room-floor').value = room.floor;
+      document.getElementById('room-capacity').value = room.capacity;
+      document.getElementById('room-color').value = room.color;
+      document.getElementById('room-facilities').value = room.facilities.join(', ');
+      document.getElementById('room-description').value = room.description || '';
+    }
+  } else {
+    title.textContent = 'Tambah Ruangan Baru';
+  }
+  
+  modal.classList.add('active');
+}
+
+function closeRoomModal() {
+  document.getElementById('room-modal').classList.remove('active');
+}
+
+// Save/Edit Room Submit Handler
+function handleRoomFormSubmit(e) {
+  e.preventDefault();
+  
+  const id = document.getElementById('room-id').value;
+  const name = document.getElementById('room-name').value.trim();
+  const floor = document.getElementById('room-floor').value.trim();
+  const capacity = parseInt(document.getElementById('room-capacity').value);
+  const color = document.getElementById('room-color').value;
+  const facilitiesRaw = document.getElementById('room-facilities').value;
+  const description = document.getElementById('room-description').value.trim();
+  
+  // Parse facilities from comma separated values
+  const facilities = facilitiesRaw.split(',')
+    .map(f => f.trim())
+    .filter(f => f.length > 0);
+    
+  if (facilities.length === 0) {
+    showToast('Masukkan minimal satu fasilitas untuk ruangan.', 'error');
+    return;
+  }
+  
+  const roomId = id || 'room-' + Date.now();
+  const roomData = {
+    id: roomId,
+    name,
+    floor,
+    capacity,
+    color,
+    facilities,
+    description
+  };
+  
+  if (id) {
+    // Edit existing room
+    const index = appState.rooms.findIndex(r => r.id === id);
+    appState.rooms[index] = roomData;
+    
+    // Check if any existing bookings exceed the new capacity
+    const bookingsExceeding = appState.bookings.filter(b => b.roomId === id && b.participants > capacity);
+    if (bookingsExceeding.length > 0) {
+      showToast(`Peringatan: Ada ${bookingsExceeding.length} rapat aktif dengan jumlah peserta melebihi kapasitas baru (${capacity} orang).`, 'error');
+    } else {
+      showToast('Data ruangan berhasil diperbarui!', 'success');
+    }
+  } else {
+    // Add new room
+    appState.rooms.push(roomData);
+    showToast('Ruangan baru berhasil ditambahkan!', 'success');
+  }
+  
+  saveRooms();
+  closeRoomModal();
+  populateRoomSelects();
+  updateStats();
+  
+  // Refresh views
+  if (appState.activeTab === 'rooms') renderRooms();
+  else if (appState.activeTab === 'manage-rooms') renderManageRooms();
+  else if (appState.activeTab === 'bookings') renderBookings();
+}
+
+// Delete Room Handler
+function deleteRoom(roomId) {
+  const room = appState.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  
+  const confirmMsg = `Apakah Anda yakin ingin menghapus "${room.name}"?\nSemua data reservasi untuk ruangan ini juga akan dihapus secara permanen.`;
+  
+  if (confirm(confirmMsg)) {
+    // Delete room
+    appState.rooms = appState.rooms.filter(r => r.id !== roomId);
+    saveRooms();
+    
+    // Cascade delete bookings for this room
+    const originalBookingCount = appState.bookings.length;
+    appState.bookings = appState.bookings.filter(b => b.roomId !== roomId);
+    saveBookings();
+    
+    const deletedBookings = originalBookingCount - appState.bookings.length;
+    if (deletedBookings > 0) {
+      showToast(`Ruangan dihapus beserta ${deletedBookings} reservasi terkait.`, 'success');
+    } else {
+      showToast('Ruangan berhasil dihapus.', 'success');
+    }
+    
+    populateRoomSelects();
+    updateStats();
+    
+    // Refresh views
+    renderManageRooms();
+    renderRooms();
+    renderBookings();
+  }
+}
+
+// Backup Export function
+function exportData() {
+  const backup = {
+    version: "1.0",
+    exportedAt: new Date().toISOString(),
+    rooms: appState.rooms,
+    bookings: appState.bookings
+  };
+  
+  const dataStr = JSON.stringify(backup, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const downloadUrl = URL.createObjectURL(dataBlob);
+  
+  const downloadAnchor = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  
+  downloadAnchor.href = downloadUrl;
+  downloadAnchor.download = `backup_reservasi_ruang_${dateStr}.json`;
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  
+  // Clean up
+  setTimeout(() => {
+    document.body.removeChild(downloadAnchor);
+    URL.revokeObjectURL(downloadUrl);
+  }, 100);
+  
+  showToast('Cadangan data berhasil diekspor!', 'success');
+}
+
+// Backup Import function
+function importData(file) {
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      // Simple validation checks on structure
+      if (!data || !Array.isArray(data.rooms) || !Array.isArray(data.bookings)) {
+        throw new Error('Skema data cadangan tidak cocok. Pastikan data rooms dan bookings ada.');
+      }
+      
+      // Additional checks for room structures
+      data.rooms.forEach(r => {
+        if (!r.id || !r.name || !r.capacity || !r.color || !Array.isArray(r.facilities)) {
+          throw new Error('Data ruangan dalam cadangan tidak valid.');
+        }
+      });
+      
+      // Additional checks for booking structures
+      data.bookings.forEach(b => {
+        if (!b.id || !b.roomId || !b.title || !b.date || !b.startTime || !b.endTime) {
+          throw new Error('Data reservasi dalam cadangan tidak valid.');
+        }
+      });
+      
+      // If validation succeeds, load it into state and save
+      appState.rooms = data.rooms;
+      appState.bookings = data.bookings;
+      
+      saveRooms();
+      saveBookings();
+      
+      // Re-populate everything
+      populateRoomSelects();
+      updateStats();
+      
+      renderRooms();
+      renderBookings();
+      renderManageRooms();
+      
+      showToast('Cadangan data berhasil diimpor dan dipasang!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(`Gagal impor: ${err.message}`, 'error');
+    }
+  };
+  
+  reader.readAsText(file);
 }
 
 // Show Floating Toast Alert
